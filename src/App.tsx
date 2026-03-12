@@ -15,6 +15,7 @@ import BusinessAccount from "./pages/app/BusinessAccount";
 import AIAssistant from "./pages/app/AIAssistant";
 import Settings from "./pages/app/Settings";
 import NotFound from "./pages/NotFound";
+import Landing from "./pages/Landing";
 
 const queryClient = new QueryClient();
 
@@ -25,7 +26,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Navigate to="/app/dashboard" replace />} />
+          <Route path="/" element={<Landing />} />
           <Route path="/auth/login" element={<Login />} />
           <Route path="/auth/signup" element={<Signup />} />
           <Route path="/app" element={<AppLayout />}>
