@@ -19,7 +19,7 @@ export default function Login() {
       <div className="w-full max-w-sm animate-fade-in">
         <div className="text-center mb-10">
           <h1 className="text-2xl font-semibold tracking-tight mb-2">
-            LedgerFlow
+            FFLOW
           </h1>
           <p className="text-sm text-muted-foreground">
             Welcome back to your business finances

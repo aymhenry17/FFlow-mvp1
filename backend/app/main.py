@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import dashboard, transactions, invoices, account, assistant
 
-app = FastAPI(title="LedgerFlow API", version="1.0.0")
+app = FastAPI(title="FFLOW API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -22,4 +22,4 @@ app.include_router(assistant.router, prefix="/api/v1/assistant", tags=["Assistan
 
 @app.get("/")
 def root():
-    return {"success": True, "data": {"message": "LedgerFlow API running"}}
+    return {"success": True, "data": {"message": "FFLOW API running"}}

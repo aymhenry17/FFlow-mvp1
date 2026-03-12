@@ -200,7 +200,7 @@ def build_rule_based_reply(message: str, intents: List[str]) -> str:
     lines: List[str] = []
 
     # Always start with a short, product-like intro
-    lines.append("Here’s a quick view of your finances based on your current LedgerFlow snapshot.")
+    lines.append("Here’s a quick view of your finances based on your current FFLOW snapshot.")
 
     # Balance / cash position
     if "balance" in intents or "summary" in intents:
@@ -278,7 +278,7 @@ def build_rule_based_reply(message: str, intents: List[str]) -> str:
 
     # Fallback note for any unsupported questions
     lines.append(
-        "These insights are based only on the financial data currently available in LedgerFlow."
+        "These insights are based only on the financial data currently available in FFLOW."
     )
 
     return " ".join(lines)

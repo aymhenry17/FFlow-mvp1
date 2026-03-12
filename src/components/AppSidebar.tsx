@@ -38,7 +38,7 @@ export function AppSidebar() {
       <div className="flex h-14 items-center px-4 border-b border-border">
         {!collapsed && (
           <span className="text-lg font-semibold tracking-tight text-foreground">
-            LedgerFlow
+            FFLOW
           </span>
         )}
         {collapsed && (
