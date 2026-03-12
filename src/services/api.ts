@@ -37,13 +37,20 @@ export async function getAccount() {
   return json.data;
 }
 
-export async function askAssistant(message: string) {
+export async function askAssistant(message: string, page?: string) {
   const res = await fetch(`${API_BASE}/assistant/chat`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify(
+      page
+        ? {
+            message,
+            page,
+          }
+        : { message }
+    ),
   });
   if (!res.ok) {
     throw new Error("API request failed");

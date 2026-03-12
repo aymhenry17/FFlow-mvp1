@@ -1,20 +1,14 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import List, Dict, Any
-from dotenv import load_dotenv
-from pathlib import Path
-import os
 
-from openai import OpenAI
 
-load_dotenv(Path(__file__).resolve().parents[2] / ".env")
-print("OPENAI KEY FOUND:", bool(os.getenv("OPENAI_API_KEY")))
 router = APIRouter()
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 class ChatRequest(BaseModel):
     message: str
+    page: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -22,7 +16,7 @@ class ChatResponse(BaseModel):
     data: Dict[str, Any]
 
 
-# Simple local financial snapshot used as context for the assistant.
+# Mock financial context for now
 CONTEXT = {
     "balance": 24830.50,
     "monthly_income": 12400.00,
@@ -84,27 +78,6 @@ CONTEXT = {
 }
 
 
-SYSTEM_PROMPT = """
-You are LedgerFlow, a financial copilot for a freelance professional.
-You receive:
-- A structured snapshot of the freelancer's current finances (balance, income, expenses, invoices, VAT estimate, recent transactions).
-- A natural-language question from the user.
-
-Your responsibilities:
-- Explain the user's current financial situation clearly and calmly.
-- Base every numeric statement strictly on the provided context. If something is not in the context, say that it is not available instead of guessing.
-- When you give any estimate (for example VAT or runway), clearly label it as an estimate and explain the high-level logic in simple terms.
-- Never give legal, tax, investment, or compliance advice. You may give practical guidance, but always suggest confirming critical decisions with an accountant or tax advisor.
-- Be concise, professional, and product-like. Prefer 2–5 short paragraphs or bullet lists over long essays.
-- Do not mention that you are using a language model or external APIs.
-
-If the user's request cannot be fully answered from the context, say what you can infer and explicitly call out what would be needed to answer more precisely.
-""".strip()
-
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-
 def detect_intents(message: str) -> List[str]:
     text = message.lower()
     intents: List[str] = []
@@ -127,136 +100,14 @@ def detect_intents(message: str) -> List[str]:
     if not intents:
         intents.append("summary")
 
-    # De‑duplicate while preserving order
     seen = set()
     unique_intents: List[str] = []
-    for it in intents:
-        if it not in seen:
-            seen.add(it)
-            unique_intents.append(it)
+    for intent in intents:
+        if intent not in seen:
+            seen.add(intent)
+            unique_intents.append(intent)
 
     return unique_intents
-
-
-def build_reply(intents: List[str]) -> Dict[str, Any]:
-    c = CONTEXT
-    parts: List[str] = []
-
-    if "summary" in intents:
-        parts.append(
-            (
-                f"Here's a quick snapshot of your freelance business. "
-                f"Your current account balance is approximately €{c['balance']:,.2f}. "
-                f"This month you've brought in about €{c['monthly_income']:,.2f} in income "
-                f"against €{c['monthly_expenses']:,.2f} in operating expenses, which is a healthy margin."
-            )
-        )
-
-    if "income" in intents:
-        parts.append(
-            (
-                f"On the income side, you're tracking roughly €{c['monthly_income']:,.2f} this month. "
-                "Most of this is driven by project work with key clients like Acme Corp and Luna Startups."
-            )
-        )
-
-    if "expenses" in intents:
-        parts.append(
-            (
-                f"Your core expenses for the month are about €{c['monthly_expenses']:,.2f}. "
-                "This includes software subscriptions, workspace costs, travel, and your tax provisions."
-            )
-        )
-
-    if "unpaid_invoices" in intents:
-        parts.append(
-            (
-                f"You currently have {c['unpaid_invoices_count']} unpaid invoices, "
-                f"totalling around €{c['unpaid_invoices_total']:,.2f}. "
-                "These are still within their payment terms but worth keeping an eye on."
-            )
-        )
-
-    if "overdue_invoices" in intents:
-        parts.append(
-            (
-                f"There are {c['overdue_invoices_count']} overdue invoices, "
-                f"with an outstanding balance of about €{c['overdue_invoices_total']:,.2f}. "
-                "At this stage, a polite reminder email to each client would be appropriate."
-            )
-        )
-
-    if "balance" in intents and "summary" not in intents:
-        parts.append(
-            (
-                f"Your available balance is currently around €{c['balance']:,.2f}. "
-                "Given your typical monthly expense level, this gives you several months of runway."
-            )
-        )
-
-    if "vat" in intents:
-        vat_estimate = c["monthly_income"] * c["vat_rate"]
-        parts.append(
-            (
-                f"Based on your current monthly income of roughly €{c['monthly_income']:,.2f} "
-                f"and a VAT rate of {int(c['vat_rate'] * 100)}%, your estimated VAT provision for the period "
-                f"would be about €{vat_estimate:,.2f}. "
-                "It's sensible to ring‑fence this amount so it doesn't get mixed with day‑to‑day spending."
-            )
-        )
-
-    # Add a brief note on recency of activity.
-    if "summary" in intents or "income" in intents or "expenses" in intents:
-        recent = c["recent_transactions"][:3]
-        if recent:
-            tx_descriptions = ", ".join(
-                f"{t['description']} ({'+' if t['amount'] > 0 else ''}€{t['amount']:,.2f})"
-                for t in recent
-            )
-            parts.append(
-                f"Recent activity includes: {tx_descriptions}. "
-                "Together, these confirm that your pipeline and cash movements are active."
-            )
-
-    parts.append(
-        "These figures are provided as a practical guide based on your current snapshot, "
-        "not as formal accounting, legal, or tax advice. For compliance‑critical decisions, "
-        "you should always confirm numbers with your accountant or tax advisor."
-    )
-
-    reply = " ".join(parts)
-
-    suggested_questions: List[str] = []
-
-    if "summary" in intents:
-        suggested_questions.append("How much runway do I have at my current burn rate?")
-        suggested_questions.append("Which clients account for most of my income?")
-
-    if "income" in intents:
-        suggested_questions.append("How does this month's income compare to last month?")
-
-    if "expenses" in intents:
-        suggested_questions.append("Which expense categories are growing the fastest?")
-
-    if "unpaid_invoices" in intents or "overdue_invoices" in intents:
-        suggested_questions.append("Which invoices should I follow up on first?")
-        suggested_questions.append("Can you draft a polite reminder for an overdue invoice?")
-
-    if "vat" in intents and "How should I set aside money for VAT each month?" not in suggested_questions:
-        suggested_questions.append("How should I set aside money for VAT each month?")
-
-    if not suggested_questions:
-        suggested_questions.extend(
-            [
-                "Give me a high‑level summary of my current financial health.",
-                "What should I pay attention to this week?",
-            ]
-        )
-
-    return {
-        "reply": reply,
-        "suggested_questions": suggested_questions[:4],
-    }
 
 
 def build_context_block() -> str:
@@ -300,45 +151,137 @@ def build_context_block() -> str:
     return "\n".join(lines)
 
 
-def call_openai_assistant(user_message: str, intents: List[str]) -> str:
-    context_block = build_context_block()
-    intents_text = ", ".join(intents) if intents else "summary"
+def build_suggested_questions(page: str | None) -> List[str]:
+    """
+    Return 4 page-specific suggested questions.
+    Defaults to dashboard questions if page is missing or unknown.
+    """
+    normalized = (page or "dashboard").lower()
 
-    user_block = (
-        f"User question: {user_message}\n"
-        f"Detected intents (for your awareness): {intents_text}.\n"
-        "Answer using only the financial context provided above."
+    if normalized == "transactions":
+        return [
+            "What are my biggest expenses this month?",
+            "Where am I spending the most money?",
+            "Are my expenses increasing?",
+            "Show me unusual spending",
+        ]
+
+    if normalized == "invoices":
+        return [
+            "Which invoices are overdue?",
+            "How much money is still unpaid?",
+            "Which clients pay the slowest?",
+            "Draft a reminder for an overdue invoice",
+        ]
+
+    if normalized == "account":
+        return [
+            "What is my current cash position?",
+            "How long can my business run with this balance?",
+            "Should I worry about cashflow this month?",
+            "How much should I keep for taxes?",
+        ]
+
+    # Default: dashboard
+    return [
+        "Give me a summary of my financial health",
+        "How much runway do I have at my current burn rate?",
+        "What should I pay attention to this week?",
+        "How much VAT should I set aside this month?",
+    ]
+
+
+def build_rule_based_reply(message: str, intents: List[str]) -> str:
+    """
+    Simple internal assistant that responds using only the mocked CONTEXT.
+    No external AI or API calls – purely rule-based.
+    """
+    c = CONTEXT
+    lines: List[str] = []
+
+    # Always start with a short, product-like intro
+    lines.append("Here’s a quick view of your finances based on your current LedgerFlow snapshot.")
+
+    # Balance / cash position
+    if "balance" in intents or "summary" in intents:
+        runway_months = (
+            c["balance"] / c["monthly_expenses"] if c["monthly_expenses"] > 0 else None
+        )
+        balance_line = f"Your current available balance is €{c['balance']:,.2f}."
+        if runway_months is not None:
+            balance_line += (
+                f" At your current monthly expenses of €{c['monthly_expenses']:,.2f}, "
+                f"that covers roughly {runway_months:.1f} months of run rate (estimate)."
+            )
+        lines.append(balance_line)
+
+    # Income
+    if "income" in intents or "summary" in intents:
+        income_line = (
+            f"This month you’ve booked about €{c['monthly_income']:,.2f} in income."
+        )
+        lines.append(income_line)
+
+    # Expenses
+    if "expenses" in intents or "summary" in intents:
+        expense_ratio = (
+            c["monthly_expenses"] / c["monthly_income"]
+            if c["monthly_income"] > 0
+            else None
+        )
+        expense_line = (
+            f"Your monthly expenses are around €{c['monthly_expenses']:,.2f}."
+        )
+        if expense_ratio is not None:
+            expense_line += (
+                f" That’s about {expense_ratio*100:.1f}% of your recorded income."
+            )
+        lines.append(expense_line)
+
+    # Unpaid & overdue invoices
+    if "unpaid_invoices" in intents or "summary" in intents:
+        lines.append(
+            f"You have {c['unpaid_invoices_count']} unpaid invoices "
+            f"totalling €{c['unpaid_invoices_total']:,.2f} waiting to be collected."
+        )
+
+    if "overdue_invoices" in intents or "summary" in intents:
+        overdue_count = c["overdue_invoices_count"]
+        overdue_total = c["overdue_invoices_total"]
+        if overdue_count > 0:
+            lines.append(
+                f"{overdue_count} of those invoices are overdue, "
+                f"for about €{overdue_total:,.2f} in late payments."
+            )
+        else:
+            lines.append("You don’t have any overdue invoices in the current snapshot.")
+
+    # VAT estimate
+    if "vat" in intents or "summary" in intents:
+        vat_estimate = c["monthly_income"] * c["vat_rate"]
+        lines.append(
+            "For VAT, based on your current month’s income "
+            f"and a rate of {int(c['vat_rate'] * 100)}%, "
+            f"you should expect roughly €{vat_estimate:,.2f} in VAT liability (estimate, not tax advice)."
+        )
+
+    # Recent activity – referenced but not over-detailed
+    if "summary" in intents:
+        if c["recent_transactions"]:
+            last_tx = c["recent_transactions"][0]
+            sign = "+" if last_tx["amount"] > 0 else ""
+            lines.append(
+                "Your latest transaction is "
+                f"{last_tx['description']} on {last_tx['date']} "
+                f"({sign}€{last_tx['amount']:,.2f}, {last_tx['type']})."
+            )
+
+    # Fallback note for any unsupported questions
+    lines.append(
+        "These insights are based only on the financial data currently available in LedgerFlow."
     )
 
-    response = client.responses.create(
-        model="gpt-4.1-mini",
-        input=[
-            {
-                "role": "system",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": f"{SYSTEM_PROMPT}\n\nFinancial context:\n{context_block}",
-                    }
-                ],
-            },
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": user_block,
-                    }
-                ],
-            },
-        ],
-    )
-
-    reply_text = getattr(response, "output_text", None)
-    if not reply_text:
-        raise ValueError("No output_text returned from OpenAI response")
-
-    return reply_text
+    return " ".join(lines)
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -346,22 +289,25 @@ def chat(request: ChatRequest) -> ChatResponse:
     intents = detect_intents(request.message)
 
     try:
-        reply = call_openai_assistant(request.message, intents)
-        # Use local logic only for suggested follow-up questions.
-        suggestions = build_reply(intents)["suggested_questions"]
-        data = {
-            "reply": reply,
-            "suggested_questions": suggestions,
-        }
-    except Exception as e:
-        fallback = build_reply(intents)
-        data = {
-            "reply": f"OPENAI ERROR: {str(e)}\n\n{fallback['reply']}",
-            "suggested_questions": fallback["suggested_questions"],
-        }
+        reply = build_rule_based_reply(request.message, intents)
+        suggestions = build_suggested_questions(request.page)
 
-    return ChatResponse(
-        success=True,
-        data=data,
-    )
+        return ChatResponse(
+            success=True,
+            data={
+                "reply": reply,
+                "suggested_questions": suggestions,
+            },
+        )
 
+    except Exception:
+        return ChatResponse(
+            success=False,
+            data={
+                "reply": "Something went wrong while generating your financial summary. Please try again in a moment.",
+                "suggested_questions": [
+                    "Give me a high-level summary of my financial health.",
+                    "What should I pay attention to this week?",
+                ],
+            },
+        )

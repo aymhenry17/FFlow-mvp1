@@ -32,6 +32,7 @@ export default function AIAssistant() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
 
   const sendMessage = async (text: string) => {
     if (!text.trim()) return;
@@ -42,7 +43,7 @@ export default function AIAssistant() {
     setError(null);
 
     try {
-      const data = await askAssistant(text);
+      const data = await askAssistant(text, "dashboard");
       const reply =
         (data as any)?.reply ||
         (data as any)?.message ||
@@ -51,6 +52,10 @@ export default function AIAssistant() {
         "I've analyzed your data. Everything looks in order today. Is there something specific you'd like to explore?";
       const assistantMsg: Message = { role: "assistant", content: reply };
       setMessages((m) => [...m, assistantMsg]);
+      const apiSuggested = (data as any)?.suggested_questions as string[] | undefined;
+      if (Array.isArray(apiSuggested) && apiSuggested.length > 0) {
+        setSuggestedQuestions(apiSuggested);
+      }
     } catch (err) {
       console.error(err);
       setError("The assistant is currently unavailable. Please try again.");
@@ -104,8 +109,23 @@ export default function AIAssistant() {
         <p className="text-xs text-destructive mb-2">{error}</p>
       )}
 
-      {/* Suggested Prompts */}
-      {messages.length <= 1 && (
+      {/* Suggested Prompts from backend (page-aware) */}
+      {suggestedQuestions.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          {suggestedQuestions.map((q) => (
+            <button
+              key={q}
+              onClick={() => sendMessage(q)}
+              className="text-xs px-3 py-1.5 rounded-full border border-border bg-card text-muted-foreground hover:bg-muted transition-colors"
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Initial static suggested prompts (first load only) */}
+      {messages.length <= 1 && suggestedQuestions.length === 0 && (
         <div className="flex flex-wrap gap-2 mb-4">
           {suggestedPrompts.map((prompt) => (
             <button
